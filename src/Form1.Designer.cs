@@ -70,9 +70,10 @@ namespace tcp_server
             this.label_status.Font = new System.Drawing.Font("MS UI Gothic", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.label_status.Location = new System.Drawing.Point(289, 37);
             this.label_status.Name = "label_status";
-            this.label_status.Size = new System.Drawing.Size(63, 22);
+            this.label_status.Size = new System.Drawing.Size(248, 22);
             this.label_status.TabIndex = 3;
-            this.label_status.Text = "label1";
+            this.label_status.Text = "__________________________________";
+            this.label_status.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // Form1
             // 

@@ -37,10 +37,9 @@ namespace tcp_server
             // 
             // button_start
             // 
-            this.button_start.Location = new System.Drawing.Point(30, 23);
-            this.button_start.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.button_start.Location = new System.Drawing.Point(50, 34);
             this.button_start.Name = "button_start";
-            this.button_start.Size = new System.Drawing.Size(52, 22);
+            this.button_start.Size = new System.Drawing.Size(87, 33);
             this.button_start.TabIndex = 0;
             this.button_start.Text = "start";
             this.button_start.UseVisualStyleBackColor = true;
@@ -48,10 +47,9 @@ namespace tcp_server
             // 
             // button_stop
             // 
-            this.button_stop.Location = new System.Drawing.Point(95, 23);
-            this.button_stop.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.button_stop.Location = new System.Drawing.Point(158, 34);
             this.button_stop.Name = "button_stop";
-            this.button_stop.Size = new System.Drawing.Size(55, 22);
+            this.button_stop.Size = new System.Drawing.Size(92, 33);
             this.button_stop.TabIndex = 1;
             this.button_stop.Text = "stop";
             this.button_stop.UseVisualStyleBackColor = true;
@@ -59,20 +57,18 @@ namespace tcp_server
             // 
             // text_log
             // 
-            this.text_log.Location = new System.Drawing.Point(30, 58);
-            this.text_log.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.text_log.Location = new System.Drawing.Point(50, 87);
             this.text_log.Multiline = true;
             this.text_log.Name = "text_log";
             this.text_log.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.text_log.Size = new System.Drawing.Size(906, 228);
+            this.text_log.Size = new System.Drawing.Size(1507, 340);
             this.text_log.TabIndex = 2;
             // 
             // label_status
             // 
             this.label_status.AutoSize = true;
             this.label_status.Font = new System.Drawing.Font("MS UI Gothic", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.label_status.Location = new System.Drawing.Point(176, 26);
-            this.label_status.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            this.label_status.Location = new System.Drawing.Point(289, 37);
             this.label_status.Name = "label_status";
             this.label_status.Size = new System.Drawing.Size(63, 22);
             this.label_status.TabIndex = 3;
@@ -80,14 +76,13 @@ namespace tcp_server
             // 
             // Form1
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(10F, 18F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(947, 300);
+            this.ClientSize = new System.Drawing.Size(1578, 450);
             this.Controls.Add(this.label_status);
             this.Controls.Add(this.text_log);
             this.Controls.Add(this.button_stop);
             this.Controls.Add(this.button_start);
-            this.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.Name = "Form1";
             this.Text = "tcp server";
             this.ResumeLayout(false);

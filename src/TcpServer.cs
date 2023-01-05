@@ -9,8 +9,8 @@ namespace tcp_server
 {
     public class TcpServer
     {
-        public delegate void ReceiveMessageCallback(string message);
-        public event ReceiveMessageCallback WriteText;
+        public delegate void ReceiveMessageCallback(byte[] message);
+        public event ReceiveMessageCallback DoAction;
 
         private readonly IPEndPoint _endPoint;
         private TcpListener _listener;
@@ -19,31 +19,42 @@ namespace tcp_server
         {
             _endPoint = ep;
         }
+
+        /// <summary>
+        /// tcpクライアントの接続の受付を開始する。(LISTEN)
+        /// </summary>
         public void StartListening()
         {
-            Debug.WriteLine("StartListening");
+            Debug.WriteLine($"start listening...   ip address:{_endPoint.Address} port:{_endPoint.Port}" );
             _listener = new TcpListener(_endPoint);
             _listener.Start();
 
             _ = Listen();
         }
 
+        /// <summary>
+        /// tcpクライアントの接続の受付を開始する。(CLOSED)
+        /// </summary>
         public void StopListning()
         {
-            Debug.WriteLine("StopListning");
+            Debug.WriteLine("stop listening");
             _listener.Stop();
         }
 
+        /// <summary>
+        /// tcpクライアントの接続を待機
+        /// </summary>
+        /// <returns></returns>
         private async Task Listen()
         {
             Debug.WriteLine("listening...");
             while (true)
             {
-                Debug.WriteLine($"waiting thread id:{Thread.CurrentThread.ManagedThreadId}");
+                Debug.WriteLine($"listening thread id:{Thread.CurrentThread.ManagedThreadId}");
                 TcpClient client;
                 try
                 {
-                    // クライアントの接続を待機
+                    // tcpクライアントの接続を待機
                     client = await _listener.AcceptTcpClientAsync();
                 }
                 catch(ObjectDisposedException)
@@ -52,17 +63,23 @@ namespace tcp_server
                 }
 
                 // メッセージ受信
-                Debug.WriteLine("ReceiveMessage");
+                Debug.WriteLine("receive start");
                 _ = ReceiveMessage(client);
  
             }
         }
 
+        /// <summary>
+        /// tcpクライアントのメッセージを受信し、何らかのアクションをする。
+        /// 何らかのアクションは、DoActionに登録する。
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
         private async Task ReceiveMessage(TcpClient client)
         {
             try
             {
-                string message = "";
+                byte[] message = null;
 
                 var ns = client.GetStream();
                 byte[] result_bytes = new byte[256];
@@ -80,13 +97,22 @@ namespace tcp_server
                         }
 
                         ms.Write(result_bytes, 0, result_size);
+
                     } while (ns.DataAvailable);
 
-                    message = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+                    message = ms.ToArray();
                 }
 
-                Debug.WriteLine($"received massage:{message}");
-                WriteText(message);
+                string str = "";
+                for (int i = 0; i < message.Length; i++)
+                {
+                    str += string.Format("{0:X2}", message[i]);
+                }
+
+                Debug.WriteLine($"received massage:{str}");
+
+                // 受信データに対して何らかの処理をする。
+                DoAction(message);
 
                 _ = ReceiveMessage(client);
             }

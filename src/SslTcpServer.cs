@@ -5,7 +5,6 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -21,6 +20,11 @@ namespace tcp_server
 
         private static X509Certificate _serverCertificate = null;
 
+        /// <summary>
+        /// 初期化
+        /// </summary>
+        /// <param name="ep">IPアドレス、ポート</param>
+        /// <param name="certFilePath">証明書ファイルのパス</param>
         public SslTcpServer(IPEndPoint ep, string certFilePath)
         {
             _endPoint = ep;
@@ -96,7 +100,7 @@ namespace tcp_server
                     enabledSslProtocols: SslProtocols.Tls12,
                     checkCertificateRevocation: true);
 
-                // Display the properties and settings for the authenticated stream.
+                // デバッグ表示
                 DisplaySecurityLevel(sslStream);
                 DisplaySecurityServices(sslStream);
                 DisplayCertificateInformation(sslStream);
@@ -125,6 +129,7 @@ namespace tcp_server
                     int bytes = -1;
                     using (var ms = new System.IO.MemoryStream())
                     {
+                        // メッセージを読み取る。
                         bytes = await sslStream.ReadAsync(result_bytes, 0, result_bytes.Length);
                         ms.Write(result_bytes, 0, bytes);
                         message = ms.ToArray();
@@ -205,6 +210,10 @@ namespace tcp_server
             }
         }
 
+        /// <summary>
+        /// keep alive用。今のところ未使用。
+        /// </summary>
+        /// <param name="client"></param>
         private void SetKeepAlive(TcpClient client)
         {
             client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);

@@ -37,6 +37,7 @@ namespace tcp_server
             // 
             // button_start
             // 
+            this.button_start.Font = new System.Drawing.Font("Meiryo UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.button_start.Location = new System.Drawing.Point(50, 34);
             this.button_start.Name = "button_start";
             this.button_start.Size = new System.Drawing.Size(87, 33);
@@ -47,6 +48,7 @@ namespace tcp_server
             // 
             // button_stop
             // 
+            this.button_stop.Font = new System.Drawing.Font("Meiryo UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.button_stop.Location = new System.Drawing.Point(158, 34);
             this.button_stop.Name = "button_stop";
             this.button_stop.Size = new System.Drawing.Size(92, 33);
@@ -57,6 +59,7 @@ namespace tcp_server
             // 
             // text_log
             // 
+            this.text_log.Font = new System.Drawing.Font("Meiryo UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.text_log.Location = new System.Drawing.Point(50, 87);
             this.text_log.Multiline = true;
             this.text_log.Name = "text_log";
@@ -67,10 +70,10 @@ namespace tcp_server
             // label_status
             // 
             this.label_status.AutoSize = true;
-            this.label_status.Font = new System.Drawing.Font("MS UI Gothic", 11F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.label_status.Font = new System.Drawing.Font("Meiryo UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.label_status.Location = new System.Drawing.Point(289, 37);
             this.label_status.Name = "label_status";
-            this.label_status.Size = new System.Drawing.Size(248, 22);
+            this.label_status.Size = new System.Drawing.Size(384, 23);
             this.label_status.TabIndex = 3;
             this.label_status.Text = "__________________________________";
             this.label_status.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -84,6 +87,7 @@ namespace tcp_server
             this.Controls.Add(this.text_log);
             this.Controls.Add(this.button_stop);
             this.Controls.Add(this.button_start);
+            this.Font = new System.Drawing.Font("MS UI Gothic", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.Name = "Form1";
             this.Text = "tcp server";
             this.ResumeLayout(false);

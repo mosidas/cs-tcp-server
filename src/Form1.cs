@@ -16,29 +16,34 @@ namespace tcp_server
             InitializeComponent();
             //_tcpServer = new TcpServer(new IPEndPoint(IPAddress.Any, _port));
             _tcpServer = new SslTcpServer(new IPEndPoint(IPAddress.Any, _port),
-                @"C:\tmp0\localhost.crt");
-            _tcpServer.DoAction += WriteReceivedMessage;
+                @"C:\tmp0\PC22010.cer");
+            _tcpServer.DoAction += WriteReceivedMessageInvoke;
             label_status.Text = "closed";
             label_status.BackColor = Color.LightGray;
         }
 
-        private void WriteReceivedMessage(byte[] s)
+        private byte[] WriteReceivedMessageInvoke(byte[] s, IPEndPoint endPoint)
         {
             if (InvokeRequired)
             {
-                _ = Invoke(new Action(delegate
+                return (byte[])Invoke(new Func<byte[]>(() =>
                 {
-                    var message = System.Text.Encoding.UTF8.GetString(s);
-                    text_log.Text += "message:" + message + Environment.NewLine;
+                    return WriteReceivedMessage(s, endPoint);
                 }));
             }
             else
             {
-                var message = System.Text.Encoding.UTF8.GetString(s);
-                text_log.Text += "message:" + message + Environment.NewLine;
+                return WriteReceivedMessage(s, endPoint);
             }
+        }
 
+        private byte[] WriteReceivedMessage(byte[] s, IPEndPoint endPoint)
+        {
+            var message = System.Text.Encoding.UTF8.GetString(s);
+            text_log.Text += $"from: {endPoint.Address}:{endPoint.Port} - message: {message}" + Environment.NewLine;
+            text_log.Text += $"to  : {endPoint.Address}:{endPoint.Port} - message: OK" + Environment.NewLine;
 
+            return System.Text.Encoding.UTF8.GetBytes("OK");
         }
 
         private void Button_start_Click(object sender, EventArgs e)

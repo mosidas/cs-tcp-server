@@ -55,6 +55,7 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SslStreamDebugger.cs" />
     <Compile Include="SslTcpServer.cs" />
     <Compile Include="TcpServer.cs" />
     <EmbeddedResource Include="Form1.resx">

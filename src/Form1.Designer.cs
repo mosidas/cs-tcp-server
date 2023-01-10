@@ -59,7 +59,7 @@ namespace tcp_server
             // 
             // text_log
             // 
-            this.text_log.Font = new System.Drawing.Font("Meiryo UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.text_log.Font = new System.Drawing.Font("Consolas", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.text_log.Location = new System.Drawing.Point(50, 87);
             this.text_log.Multiline = true;
             this.text_log.Name = "text_log";

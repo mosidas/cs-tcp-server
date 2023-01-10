@@ -13,7 +13,9 @@ namespace tcp_server
     public class SslTcpServer
     {
         public delegate byte[] ReceiveMessageCallback(byte[] message, IPEndPoint endPoint);
-        public event ReceiveMessageCallback DoAction;
+        public event ReceiveMessageCallback ReceiveAction;
+        public delegate bool AcceptTcpClientCallback(IPEndPoint endPoint);
+        public event AcceptTcpClientCallback LoginAction;
 
         private readonly IPEndPoint _endPoint;
         private readonly TcpListener _listener;
@@ -32,17 +34,17 @@ namespace tcp_server
         }
 
         /// <summary>
-        /// tcpクライアントの接続の受付を開始する。(LISTEN)
+        /// tcpクライアントの接続の受付を開始する。
         /// </summary>
         public void StartListening()
         {
             Debug.WriteLine($"start listening...   ip address:{_endPoint.Address} port:{_endPoint.Port}");
             _listener.Start();
-            _ = Listen();
+            _ = Task.Run(() => Listen());
         }
 
         /// <summary>
-        /// tcpクライアントの接続の受付を開始する。(CLOSED)
+        /// tcpクライアントの接続の受付を終了する。
         /// </summary>
         public void StopListning()
         {
@@ -66,6 +68,12 @@ namespace tcp_server
                 {
                     // tcpクライアントの接続を待機
                     client = await _listener.AcceptTcpClientAsync();
+                    if (!LoginAction((IPEndPoint)client.Client.RemoteEndPoint))
+                    {
+                        Debug.WriteLine($"{((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port} is not logined");
+                        client.Close();
+                        continue;
+                    }
                 }
                 catch (ObjectDisposedException)
                 {
@@ -74,36 +82,38 @@ namespace tcp_server
                 }
 
                 // メッセージ受信
-                _ = Task.Run(async () => { 
-                    var result = await ReceiveMessage(client);
-                    Debug.WriteLine($"receive end: {result}");
+                _ = Task.Run(() => {
+                    var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                    var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                    var result = ReceiveMessage(client);
+                    Debug.WriteLine($"receive end {ip}:{port} - {result}");
                 });
             }
         }
 
         /// <summary>
-        /// tcpクライアントのメッセージを受信し、何らかのアクションをする。
-        /// 何らかのアクションは、DoActionに登録する。
+        /// receive message from client and responce to cilent.
         /// </summary>
-        /// <param name="client"></param>
-        /// <returns></returns>
-        private async Task<bool> ReceiveMessage(TcpClient client)
+        /// <param name="client">client</param>
+        /// <returns>true: connection end(no error) false: connectin end(error)</returns>
+        private bool ReceiveMessage(TcpClient client)
         {
-            Debug.WriteLine("receive start");
+            Debug.WriteLine($"receive start thread id:{Thread.CurrentThread.ManagedThreadId} - {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}");
             using (var sslStream = new SslStream(client.GetStream(), false))
             {
                 try
                 {
+                    // Authenticate: SslProtocols = TLS1.2
                     sslStream.AuthenticateAsServer(_serverCertificate,
                         clientCertificateRequired: false,
                         enabledSslProtocols: SslProtocols.Tls12,
                         checkCertificateRevocation: true);
 
-                    // デバッグ表示
-                    SslStreamDebugger.DisplaySecurityLevel(sslStream);
-                    SslStreamDebugger.DisplaySecurityServices(sslStream);
-                    SslStreamDebugger.DisplayCertificateInformation(sslStream);
-                    SslStreamDebugger.DisplayStreamProperties(sslStream);
+                    // debug
+                    //SslStreamDebugger.DisplaySecurityLevel(sslStream);
+                    //SslStreamDebugger.DisplaySecurityServices(sslStream);
+                    //SslStreamDebugger.DisplayCertificateInformation(sslStream);
+                    //SslStreamDebugger.DisplayStreamProperties(sslStream);
                 }
                 catch (AuthenticationException aex)
                 {
@@ -116,51 +126,21 @@ namespace tcp_server
 
                 try
                 {
+                    // 10 minutes
+                    sslStream.ReadTimeout = 10 * 60 * 1000;
+
                     while (true)
                     {
-                        if (!client.Connected)
+                        // Read
+                        var receivedMessage = Read(client, sslStream);
+
+                        if (!ClientConnected(client))
                         {
                             return true;
                         }
 
-                        byte[] receivedMessage = null;
-                        byte[] result_bytes = new byte[client.ReceiveBufferSize];
-                        int bytes = -1;
-                        using (var ms = new System.IO.MemoryStream())
-                        {
-                            // メッセージを読み取る。
-                            bytes = await sslStream.ReadAsync(result_bytes, 0, result_bytes.Length);
-                            ms.Write(result_bytes, 0, bytes);
-                            receivedMessage = ms.ToArray();
-                        }
-
-                        if (bytes == 0)
-                        {
-                            Debug.WriteLine("receive end");
-                            return true;
-                        }
-
-                        string str = "";
-                        for (int i = 0; i < receivedMessage.Length; i++)
-                        {
-                            str += string.Format("{0:X2}", receivedMessage[i]);
-                        }
-                        var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-                        var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                        Debug.WriteLine($"from {ip}:{port} - received massage: {str}");
-
-                        // 受信データに対して何らかの処理をする。
-                        var responce = DoAction(receivedMessage, (IPEndPoint)client.Client.RemoteEndPoint);
-
-                        // 応答
-                        await sslStream.WriteAsync(responce, 0, responce.Length);
-
-                        str = "";
-                        for (int i = 0; i < responce.Length; i++)
-                        {
-                            str += string.Format("{0:X2}", responce[i]);
-                        }
-                        Debug.WriteLine($"to {ip}:{port} - responce massage: {str}");
+                        // Responce
+                        Responce(client, sslStream, receivedMessage);   
                     }
                 }
                 catch (Exception ex)
@@ -173,6 +153,73 @@ namespace tcp_server
                     sslStream.Close();
                     client.Close();
                 }
+            }
+        }
+
+        /// <summary>
+        /// ref: https://stackoverflow.com/questions/2661764/how-to-check-if-a-socket-is-connected-disconnected-in-c
+        /// </summary>
+        /// <param name="client">tcp client</param>
+        /// <returns>true: connected, false: disconnected</returns>
+        private bool ClientConnected(TcpClient client)
+        {
+            var a = client.Client.Poll(100, SelectMode.SelectRead);
+            var b = (client.Client.Available == 0);
+            if(a && b)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+
+        private byte[] Read(TcpClient client, SslStream sslStream)
+        {
+            byte[] receivedMessage = null;
+            byte[] buffer = new byte[client.ReceiveBufferSize];
+            using (var ms = new System.IO.MemoryStream())
+            {
+                // read
+                // 16355byteごとに読み込む。(.net framework4.8)
+                int readSize = sslStream.Read(buffer, 0, buffer.Length);
+                ms.Write(buffer, 0, readSize);
+                receivedMessage = ms.ToArray();
+            }
+
+            // debug 
+            string str = "";
+            for (int i = 0; i < receivedMessage.Length; i++)
+            {
+                str += string.Format("{0:X2}", receivedMessage[i]);
+            }
+            var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+            var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+            Debug.WriteLine($"from {ip}:{port} - received massage: {str}");
+
+            return receivedMessage;
+        }
+
+        private void Responce(TcpClient client, SslStream sslStream, byte[] receivedMessage)
+        {
+            // get responce message
+            var responce = ReceiveAction(receivedMessage, (IPEndPoint)client.Client.RemoteEndPoint);
+
+            if (responce.Length > 0)
+            {
+                // responce
+                sslStream.Write(responce, 0, responce.Length);
+
+                // debug
+                var str = "";
+                for (int i = 0; i < responce.Length; i++)
+                {
+                    str += string.Format("{0:X2}", responce[i]);
+                }
+                var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                Debug.WriteLine($"to {ip}:{port} - responce massage: {str}");
             }
         }
 

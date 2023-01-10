@@ -7,17 +7,16 @@ namespace tcp_server
 {
     public partial class Form1 : Form
     {
-        //private readonly TcpServer _tcpServer;
         private readonly SslTcpServer _tcpServer;
-        //private readonly int _port = 11111;
         private readonly int _port = 44333;
         public Form1()
         {
             InitializeComponent();
-            //_tcpServer = new TcpServer(new IPEndPoint(IPAddress.Any, _port));
             _tcpServer = new SslTcpServer(new IPEndPoint(IPAddress.Any, _port),
-                @"C:\tmp0\PC22010.cer");
-            _tcpServer.DoAction += WriteReceivedMessageInvoke;
+                @"C:\tmp0\localhost.crt");
+            _tcpServer.LoginAction += (endPoint) => { return endPoint.Port % 2 == 0; };
+            _tcpServer.ReceiveAction += WriteReceivedMessageInvoke;
+
             label_status.Text = "closed";
             label_status.BackColor = Color.LightGray;
         }

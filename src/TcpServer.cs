@@ -9,15 +9,18 @@ namespace tcp_server
 {
     public class TcpServer
     {
-        public delegate void ReceiveMessageCallback(byte[] message);
-        public event ReceiveMessageCallback DoAction;
+        public delegate byte[] ReceiveMessageCallback(byte[] message, IPEndPoint endPoint);
+        public event ReceiveMessageCallback ReceiveAction;
+        public delegate bool AcceptTcpClientCallback(IPEndPoint endPoint);
+        public event AcceptTcpClientCallback LoginAction;
 
         private readonly IPEndPoint _endPoint;
-        private TcpListener _listener;
+        private readonly TcpListener _listener;
 
         public TcpServer(IPEndPoint ep)
         {
             _endPoint = ep;
+            _listener = new TcpListener(_endPoint);
         }
 
         /// <summary>
@@ -26,10 +29,9 @@ namespace tcp_server
         public void StartListening()
         {
             Debug.WriteLine($"start listening...   ip address:{_endPoint.Address} port:{_endPoint.Port}" );
-            _listener = new TcpListener(_endPoint);
             _listener.Start();
 
-            _ = Listen();
+            _ = Task.Run(() => Listen());
         }
 
         /// <summary>
@@ -47,25 +49,36 @@ namespace tcp_server
         /// <returns></returns>
         private async Task Listen()
         {
-            Debug.WriteLine("listening...");
+            Debug.WriteLine("listen start");
             while (true)
             {
                 Debug.WriteLine($"listening thread id:{Thread.CurrentThread.ManagedThreadId}");
+
                 TcpClient client;
                 try
                 {
                     // tcpクライアントの接続を待機
                     client = await _listener.AcceptTcpClientAsync();
+                    if (!LoginAction((IPEndPoint)client.Client.RemoteEndPoint))
+                    {
+                        Debug.WriteLine($"{((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port} is not logined");
+                        client.Close();
+                        continue;
+                    }
                 }
-                catch(ObjectDisposedException)
+                catch (ObjectDisposedException)
                 {
+                    Debug.WriteLine("listen end");
                     return;
                 }
 
                 // メッセージ受信
-                Debug.WriteLine("receive start");
-                _ = ReceiveMessage(client);
- 
+                _ = Task.Run(() => {
+                    var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                    var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                    ReceiveMessage(client);
+                    Debug.WriteLine($"receive end {ip}:{port}");
+                });
             }
         }
 
@@ -75,7 +88,7 @@ namespace tcp_server
         /// </summary>
         /// <param name="client"></param>
         /// <returns></returns>
-        private async Task ReceiveMessage(TcpClient client)
+        private void ReceiveMessage(TcpClient client)
         {
             try
             {
@@ -88,7 +101,7 @@ namespace tcp_server
                 {
                     do
                     {
-                        int result_size = await ns.ReadAsync(result_bytes, 0, result_bytes.Length);
+                        int result_size = ns.Read(result_bytes, 0, result_bytes.Length);
 
                         if (result_size == 0)
                         {
@@ -112,14 +125,84 @@ namespace tcp_server
                 Debug.WriteLine($"received massage:{str}");
 
                 // 受信データに対して何らかの処理をする。
-                DoAction(message);
+                ReceiveAction(message, (IPEndPoint)client.Client.RemoteEndPoint);
 
-                _ = ReceiveMessage(client);
+                ReceiveMessage(client);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-                Debug.WriteLine(ex.ToString());
-                throw;
+                Debug.WriteLine(ex.Message);
+                return;
+            }
+            finally
+            {
+                client.Close();
+            }
+        }
+
+        private byte[] Read(TcpClient client)
+        {
+            byte[] receivedMessage = null;
+            byte[] buffer = new byte[client.ReceiveBufferSize];
+            using (var ms = new System.IO.MemoryStream())
+            {
+                // read
+                int readSize = client.GetStream().Read(buffer, 0, buffer.Length);
+                ms.Write(buffer, 0, readSize);
+                receivedMessage = ms.ToArray();
+            }
+
+            // debug 
+            string str = "";
+            for (int i = 0; i < receivedMessage.Length; i++)
+            {
+                str += string.Format("{0:X2}", receivedMessage[i]);
+            }
+            var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+            var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+            Debug.WriteLine($"from {ip}:{port} - received massage: {str}");
+
+            return receivedMessage;
+        }
+
+        /// <summary>
+        /// ref: https://stackoverflow.com/questions/2661764/how-to-check-if-a-socket-is-connected-disconnected-in-c
+        /// </summary>
+        /// <param name="client">tcp client</param>
+        /// <returns>true: connected, false: disconnected</returns>
+        private bool ClientConnected(TcpClient client)
+        {
+            var a = client.Client.Poll(100, SelectMode.SelectRead);
+            var b = (client.Client.Available == 0);
+            if (a && b)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+
+        private void Responce(TcpClient client, byte[] receivedMessage)
+        {
+            // get responce message
+            var responce = ReceiveAction(receivedMessage, (IPEndPoint)client.Client.RemoteEndPoint);
+
+            if (responce.Length > 0)
+            {
+                // responce
+                client.GetStream().Write(responce, 0, responce.Length);
+
+                // debug
+                var str = "";
+                for (int i = 0; i < responce.Length; i++)
+                {
+                    str += string.Format("{0:X2}", responce[i]);
+                }
+                var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+                Debug.WriteLine($"to {ip}:{port} - responce massage: {str}");
             }
         }
 

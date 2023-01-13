@@ -95,7 +95,7 @@ namespace tcp_server
         /// receive message from client and responce to cilent.
         /// </summary>
         /// <param name="client">client</param>
-        /// <returns>true: connection end(no error) false: connectin end(error)</returns>
+        /// <returns>true: connection end(no error) false: connectin end(error exists)</returns>
         private bool ReceiveMessage(TcpClient client)
         {
             Debug.WriteLine($"receive start thread id:{Thread.CurrentThread.ManagedThreadId} - {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}");
@@ -109,11 +109,11 @@ namespace tcp_server
                         enabledSslProtocols: SslProtocols.Tls12,
                         checkCertificateRevocation: true);
 
-                    // debug
-                    //SslStreamDebugger.DisplaySecurityLevel(sslStream);
-                    //SslStreamDebugger.DisplaySecurityServices(sslStream);
-                    //SslStreamDebugger.DisplayCertificateInformation(sslStream);
-                    //SslStreamDebugger.DisplayStreamProperties(sslStream);
+                    // Display the properties and settings for the authenticated stream.
+                    SslStreamDebugger.DisplaySecurityLevel(sslStream);
+                    SslStreamDebugger.DisplaySecurityServices(sslStream);
+                    SslStreamDebugger.DisplayCertificateInformation(sslStream);
+                    SslStreamDebugger.DisplayStreamProperties(sslStream);
                 }
                 catch (AuthenticationException aex)
                 {

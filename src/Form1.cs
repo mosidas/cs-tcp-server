@@ -16,7 +16,7 @@ namespace tcp_server
             _tcpServer = new SslTcpServer(new IPEndPoint(IPAddress.Any, _port),
                 @"C:\tmp0\localhost.crt");
             //_tcpServer = new TcpServer(new IPEndPoint(IPAddress.Any, _port));
-            _tcpServer.LoginAction += (endPoint) => { return endPoint.Port % 2 == 0; };
+            _tcpServer.LoginAction += (endPoint) => { return true; };
             _tcpServer.ReceiveAction += WriteReceivedMessageInvoke;
 
             label_status.Text = "closed";

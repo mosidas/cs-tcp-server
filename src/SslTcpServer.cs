@@ -95,7 +95,7 @@ namespace tcp_server
         /// receive message from client and responce to cilent.
         /// </summary>
         /// <param name="client">client</param>
-        /// <returns>true: connection end(no error) false: connectin end(error exists)</returns>
+        /// <returns>true: connection end(no error) false: connection end(error exists)</returns>
         private bool ReceiveMessage(TcpClient client)
         {
             Debug.WriteLine($"receive start thread id:{Thread.CurrentThread.ManagedThreadId} - {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}");
@@ -134,7 +134,7 @@ namespace tcp_server
                         // Read
                         var receivedMessage = Read(client, sslStream);
 
-                        if (!ClientConnected(client))
+                        if (!ClientIsConnected(client))
                         {
                             return true;
                         }
@@ -161,7 +161,7 @@ namespace tcp_server
         /// </summary>
         /// <param name="client">tcp client</param>
         /// <returns>true: connected, false: disconnected</returns>
-        private bool ClientConnected(TcpClient client)
+        private bool ClientIsConnected(TcpClient client)
         {
             var a = client.Client.Poll(100, SelectMode.SelectRead);
             var b = (client.Client.Available == 0);

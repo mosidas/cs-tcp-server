@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace tcp_server
 {
-    public class TcpServer
+    internal class TcpSocketServer
     {
         public delegate byte[] ReceiveMessageCallback(byte[] message, IPEndPoint endPoint);
         public event ReceiveMessageCallback ReceiveAction;
@@ -15,13 +15,13 @@ namespace tcp_server
         public event AcceptTcpClientCallback LoginAction;
 
         private readonly IPEndPoint _endPoint;
-        private readonly TcpListener _listener;
+        private Socket _listener;
 
-        public TcpServer(IPEndPoint ep)
+        internal TcpSocketServer(IPEndPoint ep)
         {
             _endPoint = ep;
-            _listener = new TcpListener(_endPoint);
-            _listener.Server.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.IpTimeToLive, 255);
+            _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _listener.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.IpTimeToLive, 255);
         }
 
         /// <summary>
@@ -29,8 +29,8 @@ namespace tcp_server
         /// </summary>
         public void StartListening()
         {
-            Debug.WriteLine($"start listening...   ip address:{_endPoint.Address} port:{_endPoint.Port}" );
-            _listener.Start();
+            Debug.WriteLine($"start listening...   ip address:{_endPoint.Address} port:{_endPoint.Port}");
+            _listener.Bind(_endPoint);
 
             _ = Task.Run(() => Listen());
         }
@@ -41,44 +41,47 @@ namespace tcp_server
         public void StopListning()
         {
             Debug.WriteLine("stop listening");
-            _listener.Stop();
+            _listener.Close();
+            _listener = null;
+            _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         }
 
         /// <summary>
         /// tcpクライアントの接続を待機
         /// </summary>
         /// <returns></returns>
-        private async Task Listen()
+        public async void Listen()
         {
             Debug.WriteLine("listen start");
+            
+            _listener.Listen(int.MaxValue);
+            Socket client;
             while (true)
             {
                 Debug.WriteLine($"listening thread id:{Thread.CurrentThread.ManagedThreadId}");
-
-                TcpClient client;
                 try
                 {
-                    // tcpクライアントの接続を待機
-                    client = await _listener.AcceptTcpClientAsync();
-                    if (!LoginAction((IPEndPoint)client.Client.RemoteEndPoint))
+                    client = await _listener.AcceptAsync();
+                    if (!LoginAction((IPEndPoint)client.RemoteEndPoint))
                     {
-                        Debug.WriteLine($"{((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port} is not logined");
+                        Debug.WriteLine($"{((IPEndPoint)client.RemoteEndPoint).Address}:{((IPEndPoint)client.RemoteEndPoint).Port} is not logined");
                         client.Close();
                         continue;
                     }
                 }
-                catch (ObjectDisposedException)
+                catch(Exception)
                 {
                     Debug.WriteLine("listen end");
                     return;
                 }
 
-                // メッセージ受信
-                _ = Task.Run(() => {
-                    var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-                    var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                    ReceiveMessage(client);
-                    Debug.WriteLine($"receive end {ip}:{port}");
+                _ = Task.Run(() =>
+                {
+                    var ip = ((IPEndPoint)client.RemoteEndPoint).Address;
+                    var port = ((IPEndPoint)client.RemoteEndPoint).Port;
+                    var result = ReceiveMessage(client);
+                    Debug.WriteLine($"receive end {ip}:{port} - {result}");
+
                 });
             }
         }
@@ -89,8 +92,9 @@ namespace tcp_server
         /// </summary>
         /// <param name="client"></param>
         /// <returns></returns>
-        private void ReceiveMessage(TcpClient client)
+        private bool ReceiveMessage(Socket client)
         {
+            Debug.WriteLine($"receive start thread id:{Thread.CurrentThread.ManagedThreadId} - {((IPEndPoint)client.RemoteEndPoint).Address}:{((IPEndPoint)client.RemoteEndPoint).Port}");
             try
             {
                 while (true)
@@ -100,7 +104,7 @@ namespace tcp_server
 
                     if (!ClientIsConnected(client))
                     {
-                        return;
+                        return true;
                     }
 
                     // Responce
@@ -110,22 +114,23 @@ namespace tcp_server
             catch (Exception ex)
             {
                 Debug.WriteLine(ex.Message);
-                return;
+                return false;
             }
             finally
             {
                 client.Close();
             }
-        }
 
-        private byte[] Read(TcpClient client)
+        }
+        private byte[] Read(Socket client)
         {
             byte[] receivedMessage = null;
             byte[] buffer = new byte[client.ReceiveBufferSize];
             using (var ms = new System.IO.MemoryStream())
             {
                 // read
-                int readSize = client.GetStream().Read(buffer, 0, buffer.Length);
+                var stream = new NetworkStream(client, true);
+                int readSize = stream.Read(buffer, 0, buffer.Length);
                 ms.Write(buffer, 0, readSize);
                 receivedMessage = ms.ToArray();
             }
@@ -136,11 +141,34 @@ namespace tcp_server
             {
                 str += string.Format("{0:X2}", receivedMessage[i]);
             }
-            var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-            var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+            var ip = ((IPEndPoint)client.RemoteEndPoint).Address;
+            var port = ((IPEndPoint)client.RemoteEndPoint).Port;
             Debug.WriteLine($"from {ip}:{port} - received massage: {str}");
 
             return receivedMessage;
+        }
+
+        private void Responce(Socket client, byte[] receivedMessage)
+        {
+            // get responce message
+            var responce = ReceiveAction(receivedMessage, (IPEndPoint)client.RemoteEndPoint);
+
+            if (responce.Length > 0)
+            {
+                // responce
+                var stream = new NetworkStream(client, true);
+                stream.Write(responce, 0, responce.Length);
+
+                // debug
+                var str = "";
+                for (int i = 0; i < responce.Length; i++)
+                {
+                    str += string.Format("{0:X2}", responce[i]);
+                }
+                var ip = ((IPEndPoint)client.RemoteEndPoint).Address;
+                var port = ((IPEndPoint)client.RemoteEndPoint).Port;
+                Debug.WriteLine($"to {ip}:{port} - responce massage: {str}");
+            }
         }
 
         /// <summary>
@@ -148,10 +176,10 @@ namespace tcp_server
         /// </summary>
         /// <param name="client">tcp client</param>
         /// <returns>true: connected, false: disconnected</returns>
-        private bool ClientIsConnected(TcpClient client)
+        private bool ClientIsConnected(Socket client)
         {
-            var a = client.Client.Poll(100, SelectMode.SelectRead);
-            var b = (client.Client.Available == 0);
+            var a = client.Poll(100, SelectMode.SelectRead);
+            var b = (client.Available == 0);
             if (a && b)
             {
                 return false;
@@ -162,36 +190,6 @@ namespace tcp_server
             }
         }
 
-        private void Responce(TcpClient client, byte[] receivedMessage)
-        {
-            // get responce message
-            var responce = ReceiveAction(receivedMessage, (IPEndPoint)client.Client.RemoteEndPoint);
-
-            if (responce.Length > 0)
-            {
-                // responce
-                client.GetStream().Write(responce, 0, responce.Length);
-
-                // debug
-                var str = "";
-                for (int i = 0; i < responce.Length; i++)
-                {
-                    str += string.Format("{0:X2}", responce[i]);
-                }
-                var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-                var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                Debug.WriteLine($"to {ip}:{port} - responce massage: {str}");
-            }
-        }
-
-        private void SetKeepAlive(TcpClient client)
-        {
-            client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-            byte[] tcp_keepalive = new byte[12];
-            BitConverter.GetBytes((Int32)1).CopyTo(tcp_keepalive, 0);//onoffスイッチ.
-            BitConverter.GetBytes((Int32)2000).CopyTo(tcp_keepalive, 4);//wait time.(ms)
-            BitConverter.GetBytes((Int32)1000).CopyTo(tcp_keepalive, 8);//interval.(ms)
-            client.Client.IOControl(IOControlCode.KeepAliveValues, tcp_keepalive, null);
-        }
+        
     }
 }

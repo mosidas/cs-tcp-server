@@ -31,6 +31,7 @@ namespace tcp_server
             _endPoint = ep;
             _serverCertificate = X509Certificate.CreateFromCertFile(certFilePath);
             _listener = new TcpListener(_endPoint);
+            _listener.Server.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.IpTimeToLive, 255);
         }
 
         /// <summary>
@@ -62,7 +63,6 @@ namespace tcp_server
             while (true)
             {
                 Debug.WriteLine($"listening thread id:{Thread.CurrentThread.ManagedThreadId}");
-
                 TcpClient client;
                 try
                 {
@@ -126,8 +126,8 @@ namespace tcp_server
 
                 try
                 {
-                    // 10 minutes
-                    sslStream.ReadTimeout = 10 * 60 * 1000;
+                    // 2 minutes
+                    sslStream.ReadTimeout = 2 * 60 * 1000;
 
                     while (true)
                     {

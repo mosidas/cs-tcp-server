@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.Net;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace tcp_server
@@ -9,6 +10,7 @@ namespace tcp_server
     {
         private readonly SslTcpServer _tcpServer;
         //private readonly TcpServer _tcpServer;
+        //private readonly TcpSocketServer _tcpServer;
         private readonly int _port = 44333;
         public Form1()
         {
@@ -16,11 +18,14 @@ namespace tcp_server
             _tcpServer = new SslTcpServer(new IPEndPoint(IPAddress.Any, _port),
                 @"C:\tmp0\localhost.crt");
             //_tcpServer = new TcpServer(new IPEndPoint(IPAddress.Any, _port));
+            //_tcpServer = new TcpSocketServer(new IPEndPoint(IPAddress.Any, _port));
             _tcpServer.LoginAction += (endPoint) => { return true; };
             _tcpServer.ReceiveAction += WriteReceivedMessageInvoke;
 
             label_status.Text = "closed";
             label_status.BackColor = Color.LightGray;
+            ThreadPool.GetMaxThreads(out int workerThreads, out int portThreads);
+            Console.WriteLine("Worker threads={0}, Completion port threads={1}", workerThreads, portThreads);
         }
 
         private byte[] WriteReceivedMessageInvoke(byte[] s, IPEndPoint endPoint)

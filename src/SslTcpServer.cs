@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
@@ -21,14 +22,16 @@ namespace tcp_server
         private readonly TcpListener _listener;
         private readonly X509Certificate _serverCertificate;
 
+        private List<TcpClient> clients { get; set; } = new List<TcpClient>();
+
         /// <summary>
         /// 初期化
         /// </summary>
         /// <param name="ep">IPアドレス、ポート</param>
         /// <param name="certFilePath">証明書ファイルのパス</param>
-        public SslTcpServer(IPEndPoint ep, string certFilePath)
+        public SslTcpServer(int port, string certFilePath)
         {
-            _endPoint = ep;
+            _endPoint = new IPEndPoint(IPAddress.Any, port);
             _serverCertificate = X509Certificate.CreateFromCertFile(certFilePath);
             _listener = new TcpListener(_endPoint);
             _listener.Server.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.IpTimeToLive, 255);
@@ -47,9 +50,13 @@ namespace tcp_server
         /// <summary>
         /// tcpクライアントの接続の受付を終了する。
         /// </summary>
-        public void StopListning()
+        public void StopListening(bool close = false)
         {
             Debug.WriteLine("stop listening");
+            if (close)
+            {
+                clients.ForEach(c => c.Close());
+            }
             _listener.Stop();
         }
 
@@ -74,6 +81,7 @@ namespace tcp_server
                         client.Close();
                         continue;
                     }
+                    clients.Add(client);
                 }
                 catch (ObjectDisposedException)
                 {
@@ -85,7 +93,7 @@ namespace tcp_server
                 _ = Task.Run(() => {
                     var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
                     var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                    var result = ReceiveMessage(client);
+                    var result = Established(client);
                     Debug.WriteLine($"receive end {ip}:{port} - {result}");
                 });
             }
@@ -96,7 +104,7 @@ namespace tcp_server
         /// </summary>
         /// <param name="client">client</param>
         /// <returns>true: connection end(no error) false: connection end(error exists)</returns>
-        private bool ReceiveMessage(TcpClient client)
+        private bool Established(TcpClient client)
         {
             Debug.WriteLine($"receive start thread id:{Thread.CurrentThread.ManagedThreadId} - {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}");
             using (var sslStream = new SslStream(client.GetStream(), false))
@@ -131,8 +139,8 @@ namespace tcp_server
 
                     while (true)
                     {
-                        // Read
-                        var receivedMessage = Read(client, sslStream);
+                        // Receive
+                        var receivedMessage = Receive(client, sslStream);
 
                         if (!ClientIsConnected(client))
                         {
@@ -152,6 +160,7 @@ namespace tcp_server
                 {
                     sslStream.Close();
                     client.Close();
+                    clients.Remove(client);
                 }
             }
         }
@@ -175,7 +184,7 @@ namespace tcp_server
             }
         }
 
-        private byte[] Read(TcpClient client, SslStream sslStream)
+        private byte[] Receive(TcpClient client, SslStream sslStream)
         {
             byte[] receivedMessage = null;
             byte[] buffer = new byte[client.ReceiveBufferSize];

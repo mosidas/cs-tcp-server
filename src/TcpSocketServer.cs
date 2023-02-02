@@ -38,7 +38,7 @@ namespace tcp_server
         /// <summary>
         /// tcpクライアントの接続の受付を開始する。(CLOSED)
         /// </summary>
-        public void StopListning()
+        public void StopListening()
         {
             Debug.WriteLine("stop listening");
             _listener.Close();

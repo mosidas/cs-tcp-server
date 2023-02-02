@@ -12,11 +12,11 @@ namespace tcp_server
         //private readonly TcpServer _tcpServer;
         //private readonly TcpSocketServer _tcpServer;
         private readonly int _port = 44333;
+        private readonly string _certFilePath = @"C:\tmp0\localhost.crt";
         public Form1()
         {
             InitializeComponent();
-            _tcpServer = new SslTcpServer(new IPEndPoint(IPAddress.Any, _port),
-                @"C:\tmp0\localhost.crt");
+            _tcpServer = new SslTcpServer(_port, _certFilePath);
             //_tcpServer = new TcpServer(new IPEndPoint(IPAddress.Any, _port));
             //_tcpServer = new TcpSocketServer(new IPEndPoint(IPAddress.Any, _port));
             _tcpServer.LoginAction += (endPoint) => { return true; };
@@ -61,7 +61,7 @@ namespace tcp_server
 
         private void Button_stop_Click(object sender, EventArgs e)
         {
-            _tcpServer.StopListning();
+            _tcpServer.StopListening();
             label_status.Text = "closed";
             label_status.BackColor = Color.LightGray;
         }

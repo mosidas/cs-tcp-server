@@ -15,8 +15,6 @@ namespace tcp_server
     {
         public delegate byte[] ReceiveMessageCallback(byte[] message, IPEndPoint endPoint);
         public event ReceiveMessageCallback ReceiveAction;
-        public delegate bool AcceptTcpClientCallback(IPEndPoint endPoint);
-        public event AcceptTcpClientCallback LoginAction;
 
         private readonly IPEndPoint _endPoint;
         private readonly TcpListener _listener;
@@ -44,7 +42,7 @@ namespace tcp_server
         {
             Debug.WriteLine($"start listening...   ip address:{_endPoint.Address} port:{_endPoint.Port}");
             _listener.Start();
-            _ = Task.Run(() => Listen());
+            _ = Task.Run(() => ConnectAsync());
         }
 
         /// <summary>
@@ -61,10 +59,10 @@ namespace tcp_server
         }
 
         /// <summary>
-        /// tcpクライアントの接続を待機
+        /// tcpクライアントの接続を待機して接続
         /// </summary>
         /// <returns></returns>
-        private async Task Listen()
+        private async Task ConnectAsync()
         {
             Debug.WriteLine("listen start");
             while (true)
@@ -75,12 +73,6 @@ namespace tcp_server
                 {
                     // tcpクライアントの接続を待機
                     client = await _listener.AcceptTcpClientAsync();
-                    if (!LoginAction((IPEndPoint)client.Client.RemoteEndPoint))
-                    {
-                        Debug.WriteLine($"{((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port} is not logined");
-                        client.Close();
-                        continue;
-                    }
                     clients.Add(client);
                 }
                 catch (ObjectDisposedException)
@@ -89,11 +81,11 @@ namespace tcp_server
                     return;
                 }
 
-                // メッセージ受信
+                // メッセージ受信開始
                 _ = Task.Run(() => {
                     var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
                     var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                    var result = Established(client);
+                    var result = StartConnection(client);
                     Debug.WriteLine($"receive end {ip}:{port} - {result}");
                 });
             }
@@ -104,31 +96,14 @@ namespace tcp_server
         /// </summary>
         /// <param name="client">client</param>
         /// <returns>true: connection end(no error) false: connection end(error exists)</returns>
-        private bool Established(TcpClient client)
+        private bool StartConnection(TcpClient client)
         {
             Debug.WriteLine($"receive start thread id:{Thread.CurrentThread.ManagedThreadId} - {((IPEndPoint)client.Client.RemoteEndPoint).Address}:{((IPEndPoint)client.Client.RemoteEndPoint).Port}");
             using (var sslStream = new SslStream(client.GetStream(), false))
             {
-                try
+                if (!StartTls(sslStream))
                 {
-                    // Authenticate: SslProtocols = TLS1.2
-                    sslStream.AuthenticateAsServer(_serverCertificate,
-                        clientCertificateRequired: false,
-                        enabledSslProtocols: SslProtocols.Tls12,
-                        checkCertificateRevocation: true);
-
-                    // Display the properties and settings for the authenticated stream.
-                    SslStreamDebugger.DisplaySecurityLevel(sslStream);
-                    SslStreamDebugger.DisplaySecurityServices(sslStream);
-                    SslStreamDebugger.DisplayCertificateInformation(sslStream);
-                    SslStreamDebugger.DisplayStreamProperties(sslStream);
-                }
-                catch (AuthenticationException aex)
-                {
-                    Debug.WriteLine("authentication failed - closing the connection.");
-                    sslStream.Close();
-                    client.Close();
-                    Debug.WriteLine(aex.Message);
+                    Close(client, sslStream);
                     return false;
                 }
 
@@ -158,10 +133,34 @@ namespace tcp_server
                 }
                 finally
                 {
-                    sslStream.Close();
-                    client.Close();
-                    clients.Remove(client);
+                    Close(client, sslStream);
                 }
+            }
+        }
+
+        private bool StartTls(SslStream sslStream)
+        {
+            try
+            {
+                // Authenticate: SslProtocols = TLS1.2
+                sslStream.AuthenticateAsServer(_serverCertificate,
+                    clientCertificateRequired: false,
+                    enabledSslProtocols: SslProtocols.Tls12,
+                    checkCertificateRevocation: true);
+
+                // Display the properties and settings for the authenticated stream.
+                SslStreamDebugger.DisplaySecurityLevel(sslStream);
+                SslStreamDebugger.DisplaySecurityServices(sslStream);
+                SslStreamDebugger.DisplayCertificateInformation(sslStream);
+                SslStreamDebugger.DisplayStreamProperties(sslStream);
+
+                return true;
+            }
+            catch (AuthenticationException aex)
+            {
+                Debug.WriteLine("authentication failed - closing the connection.");
+                Debug.WriteLine(aex.Message);
+                return false;
             }
         }
 
@@ -186,28 +185,10 @@ namespace tcp_server
 
         private byte[] Receive(TcpClient client, SslStream sslStream)
         {
-            byte[] receivedMessage = null;
+
             byte[] buffer = new byte[client.ReceiveBufferSize];
-            using (var ms = new System.IO.MemoryStream())
-            {
-                // read
-                // 16355byteごとに読み込む。(.net framework4.8)
-                int readSize = sslStream.Read(buffer, 0, buffer.Length);
-                ms.Write(buffer, 0, readSize);
-                receivedMessage = ms.ToArray();
-            }
-
-            // debug 
-            string str = "";
-            for (int i = 0; i < receivedMessage.Length; i++)
-            {
-                str += string.Format("{0:X2}", receivedMessage[i]);
-            }
-            var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-            var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-            Debug.WriteLine($"from {ip}:{port} - received massage: {str}");
-
-            return receivedMessage;
+            sslStream.Read(buffer, 0, buffer.Length);
+            return buffer;
         }
 
         private void Responce(TcpClient client, SslStream sslStream, byte[] receivedMessage)
@@ -219,17 +200,18 @@ namespace tcp_server
             {
                 // responce
                 sslStream.Write(responce, 0, responce.Length);
-
-                // debug
-                var str = "";
-                for (int i = 0; i < responce.Length; i++)
-                {
-                    str += string.Format("{0:X2}", responce[i]);
-                }
-                var ip = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-                var port = ((IPEndPoint)client.Client.RemoteEndPoint).Port;
-                Debug.WriteLine($"to {ip}:{port} - responce massage: {str}");
             }
+        }
+
+        private bool Close(TcpClient client, SslStream sslStream)
+        {
+            try
+            {
+                sslStream.Close();
+                client.Close();
+                return true;
+            }
+            catch { return false; }
         }
 
         /// <summary>
